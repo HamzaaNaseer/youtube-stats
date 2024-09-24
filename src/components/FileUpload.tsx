@@ -1,6 +1,13 @@
-import React, { ReactNode } from "react";
+import React, {
+  ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import { Upload, Button, message, Input, Space } from "antd";
 import { UploadOutlined } from "@ant-design/icons";
+import axios from "axios";
 
 interface ChannelInfo {
   email: string;
@@ -11,10 +18,14 @@ interface ChannelInfo {
   airtableToken: string;
   airtableLink: string;
   action: ReactNode;
+  views: string;
+  subs: string;
+  videos: string;
 }
 
 const FileUploader = (props) => {
-  const { setData } = props;
+  const { setData, apiKey, fetchData } = props;
+  const [channelDetails, setChannelDetails] = useState(null);
   // Function to check if the uploaded file is a text file
   const beforeUpload = (file) => {
     const isTxt = file.type === "text/plain";
@@ -30,21 +41,21 @@ const FileUploader = (props) => {
     reader.onload = (e) => {
       const fileContent = e.target.result;
       const lines = fileContent?.split("\n").map((line) => line.trim());
-      console.log(fileContent); // Logs the content of the text file
-      console.log("lines ", lines);
 
-      const parsedData: ChannelInfo[] = lines.map((line) => {
-        const [
-          email,
-          password,
-          recoveryEmail,
-          recoveryPassword,
-          channelLink,
-          airtableToken,
-          airtableLink,
-        ] = line.split(":").map((item) => item.trim());
+      const parsedData: ChannelInfo[] = lines.map((line, idx) => {
+        const [email, password, recoveryEmail, recoveryPassword, ...rest] = line
+          .split(":")
+          .map((item) => item.trim());
+
+        const channelLink = `${rest[0]}${rest[1]}`
+        const airtableToken = rest[2]
+        const airtableLink = `${rest[3]}${rest[4]}`
+
+        // Rejoin the rest of the array elements as a string
 
         return {
+          apiKey: apiKey,
+          key: idx,
           email: email || "",
           password: password || "",
           recoveryEmail: recoveryEmail || "",
@@ -54,8 +65,8 @@ const FileUploader = (props) => {
           airtableLink: airtableLink || "",
           action: (
             <Button
-              onClick={() => {
-                console.log("clicked email", email);
+              onClick={async () => {
+                fetchData(channelLink, idx);
               }}
             >
               Update
@@ -63,7 +74,6 @@ const FileUploader = (props) => {
           ),
         };
       });
-      console.log("parsed data is ", parsedData);
 
       setData(parsedData);
     };
@@ -83,8 +93,6 @@ const FileUploader = (props) => {
         >
           <Button icon={<UploadOutlined />}>Upload Text File</Button>
         </Upload>
-
-        <Input placeholder="Enter api key" style={{ maxWidth: "500px" }} />
       </Space>
     </>
   );
