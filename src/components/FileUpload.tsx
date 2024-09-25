@@ -40,16 +40,21 @@ const FileUploader = (props) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const fileContent = e.target.result;
-      const lines = fileContent?.split("\n").map((line) => line.trim());
+      const lines = fileContent
+        ?.split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line !== "");
+
+      console.log("lines are ", lines);
 
       const parsedData: ChannelInfo[] = lines.map((line, idx) => {
         const [email, password, recoveryEmail, recoveryPassword, ...rest] = line
           .split(":")
           .map((item) => item.trim());
 
-        const channelLink = `${rest[0]}${rest[1]}`
-        const airtableToken = rest[2]
-        const airtableLink = `${rest[3]}${rest[4]}`
+        const channelLink = `${rest[0]}:${rest[1]}`;
+        const airtableToken = rest[2];
+        const airtableLink = `${rest[3]}:${rest[4]}`;
 
         // Rejoin the rest of the array elements as a string
 
@@ -74,6 +79,7 @@ const FileUploader = (props) => {
           ),
         };
       });
+      console.log("parsed data ", parsedData);
 
       setData(parsedData);
     };

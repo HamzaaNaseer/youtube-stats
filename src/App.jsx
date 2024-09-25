@@ -1,7 +1,12 @@
-import { Input, Table, message } from "antd";
+import { Button, Input, Table, message } from "antd";
 import ImportFile from "./components/FileUpload";
 import { useRef, useState } from "react";
 import axios from "axios";
+import {
+  getChannelIdFromUsername,
+  getStatsCount,
+  getUserNameFromUrl,
+} from "./utils";
 
 const columns = [
   {
@@ -51,17 +56,36 @@ const columns = [
   },
 ];
 
+const fetchSingleData = async (url, apiKey) => {
+  try {
+    // Split the string at '@' and then take the part after it
+    const usernamePart = url.split("@")[1];
+
+    // Split at '?' if present, otherwise take the full string as username
+    const username = usernamePart.split("?")[0];
+
+    let params = {
+      part: "snippet",
+      q: username,
+      type: "channel",
+      key: apiKey,
+    };
+
+    let res = await axios.get(`https://www.googleapis.com/youtube/v3/search`, {
+      params: params,
+    });
+
+    let channelId = res.data.items[0]?.id?.channelId;
+
+    return channelId;
+  } catch (error) {
+    console.log("error occurred", error);
+  }
+};
+
 function App() {
   const [tableData, setTableData] = useState([]);
   const [apiKey, setApiKey] = useState("");
-
-  // useEffect(() => {
-  //   setTableData((prev) => {
-  //     return prev.map((p) => {
-  //       return { ...p, apiKey: apiKey };
-  //     });
-  //   });
-  // }, [apiKey]);
 
   const fetchData = async (url, index) => {
     // here we have to extract the usrename from the channel link
@@ -135,7 +159,63 @@ function App() {
     }
   };
 
+  const [pageSize, setPageSize] = useState(2);
+
+  const [loading, setLoading] = useState(false);
+
+  const updateAll = async () => {
+    setLoading(true);
+    let currentKey = inputRef.current.input.value;
+
+    if (!currentKey) {
+      message.error("please select api key");
+      setLoading(false);
+      return;
+    }
+
+    let startIndex = (page - 1) * pageSize;
+    let endIndex = Math.min(page * pageSize - 1, tableData.length - 1);
+    try {
+      const usernames = tableData.slice(startIndex, endIndex + 1).map((d) => {
+        console.log("d is ", d.channelLink);
+        return getUserNameFromUrl(d.channelLink);
+      });
+
+      const channelIds = await getChannelIdFromUsername(usernames, currentKey);
+
+      console.log("channel ids are ", channelIds);
+
+      const stats = await getStatsCount(channelIds, currentKey);
+      console.log("stats are ", stats);
+
+      stats.forEach((stat) => {
+        const index = channelIds.indexOf(stat.id);
+        if (index !== -1) {
+          const stats = stat.statistics;
+          const updatedItem = {
+            ...tableData[index],
+            viewCount: stats?.viewCount,
+            videoCount: stats?.videoCount,
+            subscriberCount: stats?.subscriberCount,
+          };
+
+          setTableData((prev) => {
+            const newData = [...prev];
+            newData[index] = updatedItem;
+
+            return newData;
+          });
+        }
+      });
+    } catch (error) {
+      message.error("some error occurred");
+    }
+
+    setLoading(false);
+  };
+
   const inputRef = useRef(null);
+  const [page, setPage] = useState(1);
 
   return (
     <>
@@ -154,7 +234,23 @@ function App() {
         fetchData={fetchData}
         apiKey={apiKey}
       />
-      <Table dataSource={tableData} columns={columns} />
+      <Button onClick={updateAll} loading={loading}>
+        Update All
+      </Button>
+      <Table
+        dataSource={tableData}
+        columns={columns}
+        pagination={{
+          pageSize: pageSize,
+          showSizeChanger: true,
+          pageSizeOptions: [2, 5, 10, 20, 50, 100],
+        }}
+        onChange={(pagination) => {
+          console.log("pagination is ", pagination);
+          setPage(pagination.current);
+          setPageSize(pagination.pageSize);
+        }}
+      />
     </>
   );
 }

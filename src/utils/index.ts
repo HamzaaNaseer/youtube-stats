@@ -1,77 +1,101 @@
-import moment from "moment";
+import axios from "axios";
 
-/**
- * Search for Array of strings and objects
- * one by one
- *
- * @param {string} search - value to search for
- * @param {Array<string | Record<string, string>>} filter - scale range min
- * @returns {boolean} - boolean
- */
-export const searchInArrayOfObjectsandStrings = (
-  search: string,
-  filter: Array<string | Record<string, string>> = []
-) => {
-  const minusOne = -1;
-  return (obj: string | Record<string, unknown>): boolean => {
-    /**
-     * filter array can have string or objects, nothing else.
-     * -----------------------------------------------------
-     * This funcion can search in objects, arrays and strings
-     */
-    return filter.some((f) => {
-      try {
-        if (typeof obj === "string") {
-          return obj.toLowerCase().indexOf(search.toLowerCase()) > minusOne;
-        }
-        if (typeof f === "string") {
-          if (typeof obj[f] === "string") {
-            if (moment(obj[f] as string).isValid()) {
-              return (
-                moment(obj[f] as string)
-                  .format("D MMM YYYY , h:mm:ss:A")
-                  .toLowerCase()
-                  .indexOf(search.toLowerCase()) > minusOne
-              );
-            }
-            return (
-              (obj[f] as string).toLowerCase().indexOf(search.toLowerCase()) >
-              minusOne
-            );
-          } else if (typeof obj[f] === "number") {
-            return (obj[f] as number).toString().indexOf(search) > minusOne;
-          }
-          return false;
-        } else if (typeof f == "object") {
-          /**
-           * Array is also an object
-           */
-          let found = false;
-          const keys = Object.keys(f);
-          for (let i = 0; i < keys.length; i++) {
-            if (typeof obj[keys[i]] === "object") {
-              found = (
-                Array.isArray(obj[keys[i]] as object)
-                  ? (obj[keys[i]] as Array<string | Record<string, unknown>>)
-                  : ([obj[keys[i]]] as Array<string | Record<string, unknown>>)
-              ).some(
-                searchInArrayOfObjectsandStrings(search, [f[keys[i]]] as Array<
-                  string | Record<string, string>
-                >)
-              );
-              if (found) {
-                return true;
-              }
-            } else {
-              return false;
-            }
-          }
-          return false;
-        }
-        return false;
-      } catch (e) {
-        return false;
-      }
+export const getUserNameFromUrl = (url) => {
+  // Check if the URL contains "/channel/"
+  if (url.includes("/channel/")) {
+    // Split the URL at "/channel/" and take the part after it
+    const channelId = url.split("/channel/")[1];
+    const finalChannelId = channelId.split("?")[0]; // Remove any query parameters if present
+
+    return {
+      isChannelId: true,
+      username: finalChannelId,
+    };
+  }
+
+  // If the URL contains '@', extract the username after '@'
+  if (url.includes("@")) {
+    const usernamePart = url.split("@")[1];
+    const username = usernamePart.split("?")[0]; // Remove any query parameters if present
+
+    return {
+      isChannelid: false,
+      username,
+    };
+  }
+
+  // Return null or a default value if the URL does not match expected patterns
+  return null;
+};
+
+export const getChannelId = async (username, apiKey) => {
+  try {
+    let params = {
+      part: "snippet",
+      q: username,
+      type: "channel",
+      key: apiKey,
+    };
+
+    let res = await axios.get(`https://www.googleapis.com/youtube/v3/search`, {
+      params: params,
     });
+
+    let channelId = res.data.items[0]?.id?.channelId;
+
+    return channelId;
+  } catch (error) {
+    return undefined;
+  }
+};
+
+export const getChannelIdFromUsername = async (
+  usernames: Array<{ isChannelId: boolean; username: string }>,
+  apiKey: string
+) => {
+  console.log("api key is ", apiKey);
+  const channelIds: string[] = [];
+
+  for (const data of usernames) {
+    if (data?.isChannelId) {
+      channelIds.push(data.username);
+    } else {
+      try {
+        // here i will find channel id
+        const channelId = await getChannelId(data.username, apiKey);
+        channelIds.push(channelId);
+      } catch (error) {
+        return undefined;
+      }
+      // make api call to get channelId
+    }
+  }
+
+  return channelIds;
+};
+
+export const getStatsCount = async (channelIds, apiKey) => {
+  const ids = channelIds.join(",");
+  const params = {
+    part: "statistics", // this will query us the stats of the channel
+    id: ids,
+    key: apiKey,
   };
+
+  // here make api call to fetch all the data
+
+  try {
+    let statisticsData = await axios.get(
+      `https://www.googleapis.com/youtube/v3/channels`,
+      {
+        params: params,
+      }
+    );
+
+    let stats = statisticsData.data?.items;
+
+    return stats;
+  } catch (error) {
+    return undefined;
+  }
 };
