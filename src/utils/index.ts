@@ -41,11 +41,15 @@ export const getChannelId = async (username, apiKey) => {
       params: params,
     });
 
+    if (res?.data?.items?.length > 1) {
+      return "NONE";
+    }
+
     let channelId = res.data.items[0]?.id?.channelId;
 
     return channelId;
   } catch (error) {
-    return undefined;
+    return "NONE";
   }
 };
 
@@ -98,4 +102,13 @@ export const getStatsCount = async (channelIds, apiKey) => {
   } catch (error) {
     return undefined;
   }
+};
+
+export const findAllIndexes = (arr, element) => {
+  return arr.reduce((indexes, currentElement, index) => {
+    if (currentElement === element) {
+      indexes.push(index);
+    }
+    return indexes;
+  }, []);
 };

@@ -3,6 +3,7 @@ import ImportFile from "./components/FileUpload";
 import { useRef, useState } from "react";
 import axios from "axios";
 import {
+  findAllIndexes,
   getChannelIdFromUsername,
   getStatsCount,
   getUserNameFromUrl,
@@ -55,33 +56,6 @@ const columns = [
     dataIndex: "action",
   },
 ];
-
-const fetchSingleData = async (url, apiKey) => {
-  try {
-    // Split the string at '@' and then take the part after it
-    const usernamePart = url.split("@")[1];
-
-    // Split at '?' if present, otherwise take the full string as username
-    const username = usernamePart.split("?")[0];
-
-    let params = {
-      part: "snippet",
-      q: username,
-      type: "channel",
-      key: apiKey,
-    };
-
-    let res = await axios.get(`https://www.googleapis.com/youtube/v3/search`, {
-      params: params,
-    });
-
-    let channelId = res.data.items[0]?.id?.channelId;
-
-    return channelId;
-  } catch (error) {
-    console.log("error occurred", error);
-  }
-};
 
 function App() {
   const [tableData, setTableData] = useState([]);
@@ -187,6 +161,23 @@ function App() {
 
       const stats = await getStatsCount(channelIds, currentKey);
       console.log("stats are ", stats);
+
+      // updating all the undefined ids
+      const channelsNotFound = findAllIndexes(channelIds, "NONE");
+
+      channelsNotFound?.forEach((idx) => {
+        setTableData((prev) => {
+          const newData = [...prev];
+
+          newData[idx] = {
+            ...prev[idx],
+            viewCount: "?",
+            videoCount: "?",
+            subscriberCount: "?",
+          };
+          return newData;
+        });
+      });
 
       stats.forEach((stat) => {
         const index = channelIds.indexOf(stat.id);
