@@ -1,13 +1,15 @@
-import { Button, Input, Table, message } from "antd";
+import { Button, Input, Skeleton, Space, Table, message } from "antd";
 import ImportFile from "./components/FileUpload";
-import { useRef, useState } from "react";
-import axios from "axios";
+import { useEffect, useRef, useState } from "react";
 import {
-  findAllIndexes,
-  getChannelIdFromUsername,
-  getStatsCount,
-  getUserNameFromUrl,
-} from "./utils";
+  deleteRow,
+  deleteTable,
+  getStats,
+  updateStats,
+} from "./appRedux/actions/statsActions";
+import { useAppDispatch } from "./appRedux/reducers/store";
+import { useSelector } from "react-redux";
+import { StatsSelector } from "./appRedux/reducers";
 
 const columns = [
   {
@@ -41,15 +43,15 @@ const columns = [
 
   {
     title: "Views",
-    dataIndex: "viewCount",
+    dataIndex: "views",
   },
   {
     title: "Subscribers",
-    dataIndex: "subscriberCount",
+    dataIndex: "subs",
   },
   {
     title: "Videos",
-    dataIndex: "videoCount",
+    dataIndex: "videos",
   },
   {
     title: "Action",
@@ -58,155 +60,87 @@ const columns = [
 ];
 
 function App() {
-  const [tableData, setTableData] = useState([]);
   const [apiKey, setApiKey] = useState("");
+  const [fetchLoading, setFetchLoading] = useState(false);
 
-  const fetchData = async (url, index) => {
-    // here we have to extract the usrename from the channel link
+  const { stats: apiStats, total } = useSelector(StatsSelector);
 
-    // Split the string at '@' and then take the part after it
-    const usernamePart = url.split("@")[1];
+  const defaultCurrent = 1;
+  const defaultPageSize = 6;
 
-    // Split at '?' if present, otherwise take the full string as username
-    const username = usernamePart.split("?")[0];
+  const [pageData, setPageData] = useState({
+    current: defaultCurrent,
+    pageSize: defaultPageSize,
+  });
 
-    let currentKey = inputRef.current.input.value;
+  const dispatch = useAppDispatch();
 
-    if (!currentKey) {
-      message.error("please select api key");
-      return;
-    }
-    try {
-      let params = {
-        part: "snippet",
-        q: username,
-        type: "channel",
-        key: currentKey,
-      };
-
-      let res = await axios.get(
-        `https://www.googleapis.com/youtube/v3/search`,
-        {
-          params: params,
-        }
-      );
-
-      let channelId = res.data.items[0]?.id?.channelId;
-
-      // now that we got channel id we will query for the statistics
-
-      let statisticsData = await axios.get(
-        `https://www.googleapis.com/youtube/v3/channels`,
-        {
-          params: {
-            part: "statistics", // this will query us the stats of the channel
-            id: channelId,
-            key: currentKey,
-          },
-        }
-      );
-
-      let stats = statisticsData.data?.items[0]?.statistics;
-
-      setTableData((prev) => {
-        return prev.map((p, idx) => {
-          if (idx === index) {
-            return {
-              ...p,
-              viewCount: stats?.viewCount,
-              videoCount: stats?.videoCount,
-              subscriberCount: stats?.subscriberCount,
-            };
-          }
-          return p;
-        });
-      });
-
-      return {
-        viewCount: stats?.viewCount,
-        videoCount: stats?.videoCount,
-        subscriberCount: stats?.subscriberCount,
-      };
-    } catch (error) {
-      console.log("error is ", error);
-      return false;
-    }
-  };
+  useEffect(() => {
+    fetchStats();
+  }, [pageData]);
 
   const [pageSize, setPageSize] = useState(2);
 
   const [loading, setLoading] = useState(false);
 
-  const updateAll = async () => {
-    setLoading(true);
-    let currentKey = inputRef.current.input.value;
+  const inputRef = useRef(null);
 
-    if (!currentKey) {
-      message.error("please select api key");
-      setLoading(false);
-      return;
-    }
-
-    let startIndex = (page - 1) * pageSize;
-    let endIndex = Math.min(page * pageSize - 1, tableData.length - 1);
-    try {
-      const usernames = tableData.slice(startIndex, endIndex + 1).map((d) => {
-        console.log("d is ", d.channelLink);
-        return getUserNameFromUrl(d.channelLink);
-      });
-
-      const channelIds = await getChannelIdFromUsername(usernames, currentKey);
-
-      console.log("channel ids are ", channelIds);
-
-      const stats = await getStatsCount(channelIds, currentKey);
-      console.log("stats are ", stats);
-
-      // updating all the undefined ids
-      const channelsNotFound = findAllIndexes(channelIds, "NONE");
-
-      channelsNotFound?.forEach((idx) => {
-        setTableData((prev) => {
-          const newData = [...prev];
-
-          newData[idx] = {
-            ...prev[idx],
-            viewCount: "?",
-            videoCount: "?",
-            subscriberCount: "?",
-          };
-          return newData;
-        });
-      });
-
-      stats.forEach((stat) => {
-        const index = channelIds.indexOf(stat.id);
-        if (index !== -1) {
-          const stats = stat.statistics;
-          const updatedItem = {
-            ...tableData[index],
-            viewCount: stats?.viewCount,
-            videoCount: stats?.videoCount,
-            subscriberCount: stats?.subscriberCount,
-          };
-
-          setTableData((prev) => {
-            const newData = [...prev];
-            newData[index] = updatedItem;
-
-            return newData;
-          });
-        }
-      });
-    } catch (error) {
-      message.error("some error occurred");
-    }
-
-    setLoading(false);
+  /**
+   *  Fetch logs
+   */
+  const fetchStats = async () => {
+    setFetchLoading(true);
+    await dispatch(
+      getStats({
+        page: Number(pageData.current),
+        limit: Number(pageData.pageSize),
+      })
+    );
+    setFetchLoading(false);
   };
 
-  const inputRef = useRef(null);
-  const [page, setPage] = useState(1);
+  const [updateLoading, setUpdateLoading] = useState(false);
+  const [deleteTableLoading, setDeleteTableLoading] = useState(false);
+
+  const prepareStatsData =
+    (apiStats &&
+      apiStats.map((a, idx) => {
+        return {
+          ...a,
+          action: (
+            <Space>
+              <Button
+                loading={updateLoading}
+                onClick={async () => {
+                  if (!apiKey) {
+                    message.error("select api key");
+
+                    return;
+                  }
+                  setUpdateLoading(true);
+                  dispatch(
+                    updateStats({
+                      apiKey: inputRef.current.input.value,
+                      statsToUpdate: [{ ...a }],
+                    })
+                  );
+                  setUpdateLoading(false);
+                }}
+              >
+                Update
+              </Button>
+              <Button
+                onClick={() => {
+                  dispatch(deleteRow(a._id));
+                }}
+              >
+                Delete
+              </Button>
+            </Space>
+          ),
+        };
+      })) ||
+    [];
 
   return (
     <>
@@ -220,28 +154,53 @@ function App() {
         }}
       />
 
-      <ImportFile
-        setData={setTableData}
-        fetchData={fetchData}
-        apiKey={apiKey}
-      />
-      <Button onClick={updateAll} loading={loading}>
+      <ImportFile apiKey={apiKey} />
+      <Button
+        onClick={async () => {
+          setLoading(true);
+          await dispatch(
+            updateStats({
+              apiKey: inputRef.current.input.value,
+              statsToUpdate: apiStats,
+            })
+          );
+          setLoading(false);
+        }}
+        loading={loading}
+      >
         Update All
       </Button>
-      <Table
-        dataSource={tableData}
-        columns={columns}
-        pagination={{
-          pageSize: pageSize,
-          showSizeChanger: true,
-          pageSizeOptions: [2, 5, 10, 20, 50, 100],
+
+      <Button
+        onClick={async () => {
+          setDeleteTableLoading(true);
+          await dispatch(deleteTable());
+          setDeleteTableLoading(false);
         }}
-        onChange={(pagination) => {
-          console.log("pagination is ", pagination);
-          setPage(pagination.current);
-          setPageSize(pagination.pageSize);
-        }}
-      />
+        loading={deleteTableLoading}
+      >
+        Delete All
+      </Button>
+
+      {fetchLoading ? (
+        <Skeleton />
+      ) : (
+        <Table
+          dataSource={prepareStatsData}
+          columns={columns}
+          pagination={{
+            current: pageData?.current,
+            defaultPageSize: defaultPageSize,
+            showSizeChanger: true,
+            total: total,
+            position: ["bottomCenter"],
+            // eslint-disable-next-line no-magic-numbers
+            pageSizeOptions: [2, 6, 10, 20, 50],
+            pageSize: pageData.pageSize,
+          }}
+          onChange={setPageData}
+        />
+      )}
     </>
   );
 }
