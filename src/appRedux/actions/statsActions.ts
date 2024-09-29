@@ -97,3 +97,16 @@ export const deleteRow = createAsyncThunk(
     }
   }
 );
+
+export const uploadVideo = createAsyncThunk(
+  "stats/updateStats",
+  async (data, { dispatch }) => {
+    try {
+      const res = await BackendInstance.post(`stats/upload-video`, data);
+      return true;
+    } catch (err) {
+      console.log("error occurred ", err);
+      return false;
+    }
+  }
+);

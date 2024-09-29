@@ -1,4 +1,14 @@
-import { Button, Input, Skeleton, Space, Table, message } from "antd";
+import {
+  Button,
+  Col,
+  Input,
+  Modal,
+  Row,
+  Skeleton,
+  Space,
+  Table,
+  message,
+} from "antd";
 import ImportFile from "./components/FileUpload";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -6,10 +16,12 @@ import {
   deleteTable,
   getStats,
   updateStats,
+  uploadVideo,
 } from "./appRedux/actions/statsActions";
 import { useAppDispatch } from "./appRedux/reducers/store";
 import { useSelector } from "react-redux";
 import { StatsSelector } from "./appRedux/reducers";
+import { ExclamationCircleOutlined } from "@ant-design/icons";
 
 const columns = [
   {
@@ -64,6 +76,10 @@ function App() {
   const [fetchLoading, setFetchLoading] = useState(false);
 
   const { stats: apiStats, total } = useSelector(StatsSelector);
+
+  const [videoLink, setVideoLink] = useState("");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
 
   const defaultCurrent = 1;
   const defaultPageSize = 6;
@@ -136,6 +152,52 @@ function App() {
               >
                 Delete
               </Button>
+              <Button
+                onClick={() => {
+                  Modal.confirm({
+                    title: "Upload Video",
+                    icon: <ExclamationCircleOutlined />,
+                    content: (
+                      <>
+                        <Row>
+                          <Col span={24}>
+                            <Input
+                              placeholder="Video url"
+                              onChange={(e) => setVideoLink(e.target.value)}
+                            ></Input>
+                          </Col>
+                          <Col span={12}>
+                            <Input
+                              placeholder="Video Title"
+                              onChange={(e) => setTitle(e.target.value)}
+                            ></Input>
+                          </Col>
+                          <Col span={12}>
+                            <Input
+                              placeholder="Video Description"
+                              onChange={(e) => setDescription(e.target.value)}
+                            ></Input>
+                          </Col>
+                        </Row>
+                      </>
+                    ),
+                    okText: "upload",
+                    cancelText: "cancel",
+                    onOk: async (...args) => {
+                      await dispatch(
+                        uploadVideo({
+                          videoLink,
+                          title,
+                          description,
+                          statId: a._id,
+                        })
+                      );
+                    },
+                  });
+                }}
+              >
+                upload
+              </Button>
             </Space>
           ),
         };
@@ -156,6 +218,7 @@ function App() {
 
       <ImportFile apiKey={apiKey} />
       <Button
+        disabled={apiKey.length === 0}
         onClick={async () => {
           setLoading(true);
           await dispatch(

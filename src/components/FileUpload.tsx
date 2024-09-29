@@ -78,7 +78,9 @@ const FileUploader = (props) => {
         return { ...p };
       });
 
-      dispatch(postStats(apiData));
+      dispatch(postStats(apiData)).then(() => {
+        dispatch(getStats());
+      });
     };
     reader.readAsText(file); // Reads the file as text
   };
