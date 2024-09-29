@@ -8,6 +8,8 @@ import React, {
 import { Upload, Button, message, Input, Space } from "antd";
 import { UploadOutlined } from "@ant-design/icons";
 import axios from "axios";
+import { useAppDispatch } from "../appRedux/reducers/store";
+import { getStats, postStats } from "../appRedux/actions/statsActions";
 
 interface ChannelInfo {
   email: string;
@@ -24,8 +26,8 @@ interface ChannelInfo {
 }
 
 const FileUploader = (props) => {
-  const { setData, apiKey, fetchData } = props;
-  const [channelDetails, setChannelDetails] = useState(null);
+  const { apiKey } = props;
+  const dispatch = useAppDispatch();
   // Function to check if the uploaded file is a text file
   const beforeUpload = (file) => {
     const isTxt = file.type === "text/plain";
@@ -36,7 +38,7 @@ const FileUploader = (props) => {
   };
 
   // Function to handle the file upload and reading
-  const handleUpload = (file) => {
+  const handleUpload = async (file) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const fileContent = e.target.result;
@@ -68,20 +70,17 @@ const FileUploader = (props) => {
           channelLink: channelLink || "",
           airtableToken: airtableToken || "",
           airtableLink: airtableLink || "",
-          action: (
-            <Button
-              onClick={async () => {
-                fetchData(channelLink, idx);
-              }}
-            >
-              Update
-            </Button>
-          ),
         };
       });
-      console.log("parsed data ", parsedData);
 
-      setData(parsedData);
+      let apiData = parsedData.map((p) => {
+        const { action, ...rest } = p;
+        return { ...p };
+      });
+
+      dispatch(postStats(apiData)).then(() => {
+        dispatch(getStats());
+      });
     };
     reader.readAsText(file); // Reads the file as text
   };
@@ -93,7 +92,7 @@ const FileUploader = (props) => {
           beforeUpload={beforeUpload}
           customRequest={({ file, onSuccess }) => {
             handleUpload(file);
-            onSuccess("ok"); // Mock successful upload
+            // onSuccess("ok"); // Mock successful upload
           }}
           showUploadList={false} // Hide the file list to prevent clutter
         >
